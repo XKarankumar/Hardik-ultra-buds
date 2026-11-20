@@ -170,6 +170,7 @@ data class AppPreferencesState(
     val autoReconnectEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
     val autoUpdateCheckEnabled: Boolean = true,
+    val autoAiHealEnabled: Boolean = true,
     val safeListeningThresholdPct: Int = 80,
     val githubRepoUrl: String = "https://github.com/hardik-audio/hardik-buds-pro-ultra-max",
     val customPresets: List<EqPreset> = emptyList(),

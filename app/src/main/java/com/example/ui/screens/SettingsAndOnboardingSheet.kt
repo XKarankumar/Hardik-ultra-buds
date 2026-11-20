@@ -212,6 +212,7 @@ fun SettingsSheet(
     onToggleHaptics: (Boolean) -> Unit,
     onToggleAutoReconnect: (Boolean) -> Unit,
     onToggleAutoUpdate: (Boolean) -> Unit,
+    onToggleAutoAiHeal: (Boolean) -> Unit,
     onSafeThresholdChange: (Int) -> Unit,
     onOpenOnboarding: () -> Unit,
     onDismiss: () -> Unit
@@ -295,6 +296,14 @@ fun SettingsSheet(
                     checked = prefsState.autoUpdateCheckEnabled,
                     onCheckedChange = onToggleAutoUpdate,
                     testTag = "setting_autoupdate_switch"
+                )
+                DotMatrixDivider()
+                SettingToggleRow(
+                    title = "AI AUTO-FIX ON ERRORS",
+                    subtitle = "Automatically diagnose & self-heal errors via Gemini AI",
+                    checked = prefsState.autoAiHealEnabled,
+                    onCheckedChange = onToggleAutoAiHeal,
+                    testTag = "setting_ai_heal_switch"
                 )
                 DotMatrixDivider()
                 Spacer(modifier = Modifier.height(6.dp))

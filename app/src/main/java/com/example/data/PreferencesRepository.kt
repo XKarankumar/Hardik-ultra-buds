@@ -43,6 +43,7 @@ class PreferencesRepository(private val context: Context) {
         val AUTO_RECONNECT = booleanPreferencesKey("auto_reconnect")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         val AUTO_UPDATE_CHECK = booleanPreferencesKey("auto_update_check")
+        val AUTO_AI_HEAL = booleanPreferencesKey("auto_ai_heal")
         val SAFE_LISTENING_THRESHOLD = intPreferencesKey("safe_listening_threshold")
         val GITHUB_REPO_URL = stringPreferencesKey("github_repo_url")
         val CUSTOM_PRESETS_JSON = stringPreferencesKey("custom_presets_json")
@@ -76,6 +77,7 @@ class PreferencesRepository(private val context: Context) {
             autoReconnectEnabled = prefs[Keys.AUTO_RECONNECT] ?: true,
             hapticsEnabled = prefs[Keys.HAPTICS_ENABLED] ?: true,
             autoUpdateCheckEnabled = prefs[Keys.AUTO_UPDATE_CHECK] ?: true,
+            autoAiHealEnabled = prefs[Keys.AUTO_AI_HEAL] ?: true,
             safeListeningThresholdPct = prefs[Keys.SAFE_LISTENING_THRESHOLD] ?: 80,
             githubRepoUrl = prefs[Keys.GITHUB_REPO_URL]
                 ?: "https://github.com/hardik-audio/hardik-buds-pro-ultra-max",
@@ -140,6 +142,10 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setAutoUpdateCheck(enabled: Boolean) {
         context.dataStore.edit { it[Keys.AUTO_UPDATE_CHECK] = enabled }
+    }
+
+    suspend fun setAutoAiHeal(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_AI_HEAL] = enabled }
     }
 
     suspend fun setSafeListeningThreshold(pct: Int) {

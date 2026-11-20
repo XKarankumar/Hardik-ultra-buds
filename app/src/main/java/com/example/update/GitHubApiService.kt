@@ -6,6 +6,7 @@ import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Headers
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 @JsonClass(generateAdapter = true)
 data class GitHubReleaseDto(
@@ -27,6 +28,11 @@ data class GitHubAssetDto(
     @Json(name = "content_type") val contentType: String?
 )
 
+@JsonClass(generateAdapter = true)
+data class GitHubRepoMetaDto(
+    @Json(name = "full_name") val fullName: String
+)
+
 interface GitHubApiService {
     @Headers(
         "Accept: application/vnd.github+json",
@@ -37,4 +43,25 @@ interface GitHubApiService {
         @Path("owner") owner: String,
         @Path("repo") repo: String
     ): Response<GitHubReleaseDto>
+
+    @Headers(
+        "Accept: application/vnd.github+json",
+        "User-Agent: HardikBudsProUltraMax-Android"
+    )
+    @GET("repos/{owner}/{repo}/releases")
+    suspend fun getReleases(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("per_page") perPage: Int = 5
+    ): Response<List<GitHubReleaseDto>>
+
+    @Headers(
+        "Accept: application/vnd.github+json",
+        "User-Agent: HardikBudsProUltraMax-Android"
+    )
+    @GET("repos/{owner}/{repo}")
+    suspend fun getRepoMetadata(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): Response<GitHubRepoMetaDto>
 }

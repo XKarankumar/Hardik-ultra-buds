@@ -54,6 +54,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.ai.configureAppCheck
 import com.example.model.AppDestination
 import com.example.ui.screens.AncControlScreen
 import com.example.ui.screens.DevicesScreen
@@ -74,6 +75,7 @@ import com.example.viewmodel.MainViewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.BLACK),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.BLACK)
@@ -98,6 +100,7 @@ fun HardikBudsRootApp(
     val deviceState by viewModel.deviceState.collectAsStateWithLifecycle()
     val prefsState by viewModel.preferencesState.collectAsStateWithLifecycle()
     val updateStatus by viewModel.updateStatus.collectAsStateWithLifecycle()
+    val aiDoctorState by viewModel.aiDoctorState.collectAsStateWithLifecycle()
     val showOnboarding by viewModel.showOnboardingSheet.collectAsStateWithLifecycle()
     val showSettings by viewModel.showSettingsSheet.collectAsStateWithLifecycle()
 
@@ -272,11 +275,17 @@ fun HardikBudsRootApp(
                             SystemUpdateScreen(
                                 currentVersion = viewModel.currentAppVersion(),
                                 updateStatus = updateStatus,
+                                aiDoctorState = aiDoctorState,
                                 prefsState = prefsState,
                                 onCheckForUpdates = { viewModel.checkForUpdates() },
                                 onDownloadUpdate = { viewModel.downloadUpdate() },
                                 onInstallUpdate = launchApkInstaller,
-                                onSaveRepoUrl = { viewModel.updateGithubRepoUrl(it) }
+                                onSaveRepoUrl = { viewModel.updateGithubRepoUrl(it) },
+                                onDiagnoseError = { viewModel.diagnoseCustomError(it) },
+                                onRequestBtPermissions = {
+                                    permissionLauncher.launch(viewModel.requiredBluetoothPermissions())
+                                },
+                                onOpenBtSettings = launchBluetoothSettings
                             )
                         }
                     }
@@ -303,6 +312,7 @@ fun HardikBudsRootApp(
             onToggleHaptics = { viewModel.setHapticsEnabled(it) },
             onToggleAutoReconnect = { viewModel.setAutoReconnect(it) },
             onToggleAutoUpdate = { viewModel.setAutoUpdateCheck(it) },
+            onToggleAutoAiHeal = { viewModel.setAutoAiHeal(it) },
             onSafeThresholdChange = { viewModel.setSafeListeningThreshold(it) },
             onOpenOnboarding = { viewModel.openOnboarding() },
             onDismiss = { viewModel.closeSettings() }

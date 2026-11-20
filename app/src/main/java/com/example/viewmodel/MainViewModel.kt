@@ -5,6 +5,9 @@ import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.HardikBudsApp
+import com.example.ai.AiDoctorUiState
+import com.example.ai.AiErrorDoctor
+import com.example.ai.AutoFixAction
 import com.example.model.AncMode
 import com.example.model.AppPreferencesState
 import com.example.model.AudioEngineState
@@ -12,7 +15,9 @@ import com.example.model.EarbudsDeviceState
 import com.example.model.EqPreset
 import com.example.model.SoundProfileMode
 import com.example.model.UpdateStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +37,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val audioEngine = app.audioEngine
     private val btManager = app.bluetoothManager
     private val updateManager = app.updateManager
+    private val aiErrorDoctor = AiErrorDoctor()
 
     val audioState: StateFlow<AudioEngineState> = audioEngine.state
     val deviceState: StateFlow<EarbudsDeviceState> = btManager.state
@@ -46,6 +52,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _showSettingsSheet = MutableStateFlow(false)
     val showSettingsSheet: StateFlow<Boolean> = _showSettingsSheet.asStateFlow()
 
+    private val _aiDoctorState = MutableStateFlow<AiDoctorUiState>(AiDoctorUiState.Idle)
+    val aiDoctorState: StateFlow<AiDoctorUiState> = _aiDoctorState.asStateFlow()
+
     init {
         viewModelScope.launch {
             val savedAudio = prefsRepo.savedAudioStateFlow.first()
@@ -56,7 +65,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             audioEngine.updateSafeListeningThreshold(prefs.safeListeningThresholdPct)
 
             if (prefs.autoUpdateCheckEnabled) {
-                updateManager.checkForUpdates(prefs.githubRepoUrl, recordHistory = false)
+                val res = updateManager.checkForUpdates(prefs.githubRepoUrl, recordHistory = false)
+                if (res is UpdateStatus.Error && prefs.autoAiHealEnabled) {
+                    diagnoseAndAutoHeal("GitHub Update Launch Check", res.message)
+                }
             }
         }
 
@@ -163,6 +175,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { prefsRepo.setAutoUpdateCheck(enabled) }
     }
 
+    fun setAutoAiHeal(enabled: Boolean) {
+        viewModelScope.launch { prefsRepo.setAutoAiHeal(enabled) }
+    }
+
     fun setSafeListeningThreshold(pct: Int) {
         audioEngine.updateSafeListeningThreshold(pct)
         viewModelScope.launch { prefsRepo.setSafeListeningThreshold(pct) }
@@ -174,12 +190,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- GitHub Releases Updater ---
+    // --- GitHub Releases Updater + AI Auto-Fix ---
     fun currentAppVersion(): String = updateManager.currentVersionName()
 
     fun checkForUpdates() {
         viewModelScope.launch {
-            updateManager.checkForUpdates(preferencesState.value.githubRepoUrl, recordHistory = true)
+            val prefs = preferencesState.value
+            val result = updateManager.checkForUpdates(prefs.githubRepoUrl, recordHistory = true)
+            if (result is UpdateStatus.Error && prefs.autoAiHealEnabled) {
+                diagnoseAndAutoHeal("GitHub Release Check", result.message)
+            }
         }
     }
 
@@ -187,6 +207,93 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = updateStatus.value as? UpdateStatus.Available ?: return
         viewModelScope.launch {
             updateManager.downloadAndVerifyUpdate(current)
+            val after = updateStatus.value
+            if (after is UpdateStatus.Error && preferencesState.value.autoAiHealEnabled) {
+                diagnoseAndAutoHeal("GitHub APK Download / SHA-256", after.message)
+            }
+        }
+    }
+
+    fun diagnoseCustomError(errorLog: String) {
+        val clean = errorLog.trim()
+        if (clean.isEmpty()) return
+        diagnoseAndAutoHeal("Manual / GitHub CI Log", clean)
+    }
+
+    fun clearAiDiagnosis() {
+        _aiDoctorState.value = AiDoctorUiState.Idle
+    }
+
+    fun diagnoseAndAutoHeal(errorSource: String, errorDetail: String) {
+        viewModelScope.launch {
+            _aiDoctorState.value = AiDoctorUiState.Analyzing(errorDetail.take(120))
+            val prefs = preferencesState.value
+            val d = deviceState.value
+            val a = audioState.value
+            val contextSummary = "BT=${d.isBluetoothEnabled}, Perms=${d.hasBluetoothPermissions}, " +
+                "Connected=${d.isConnected} (${d.connectedDeviceName}), DSP=${a.engineStatusMessage}, " +
+                "Limiter=${a.isLimiterActive}, SafeAlert=${a.isSafeListeningWarning}"
+
+            try {
+                val diagnosis = aiErrorDoctor.diagnoseError(
+                    errorSource = errorSource,
+                    errorDetail = errorDetail,
+                    currentRepoUrl = prefs.githubRepoUrl,
+                    appContextSummary = contextSummary
+                )
+
+                var autoAppliedNote: String? = null
+                when (diagnosis.autoFixAction) {
+                    AutoFixAction.NORMALIZE_GITHUB_URL -> {
+                        val candidate = diagnosis.suggestedRepoUrl
+                        if (!candidate.isNullOrBlank() &&
+                            updateManager.parseOwnerRepo(candidate) != null &&
+                            candidate != prefs.githubRepoUrl
+                        ) {
+                            prefsRepo.setGithubRepoUrl(candidate)
+                            autoAppliedNote = "Auto-updated GitHub URL to $candidate"
+                        }
+                    }
+                    AutoFixAction.SWITCH_TO_TEST_SIGNAL_DSP -> {
+                        if (!a.isTestTonePlaying) {
+                            audioEngine.toggleAcousticTestSignal()
+                            autoAppliedNote = "Auto-switched DSP to dedicated AudioTrack session."
+                        }
+                    }
+                    AutoFixAction.ENABLE_SOFT_LIMITER -> {
+                        audioEngine.setLimiterActive(true)
+                        if (a.volumeEnhanceDb > 6f) {
+                            audioEngine.setVolumeEnhanceDb(5.0f)
+                        }
+                        autoAppliedNote = "Auto-armed -1.0 dBFS Soft Limiter and stabilized gain."
+                    }
+                    AutoFixAction.TRIGGER_BLE_GATT_PROBE -> {
+                        btManager.refreshConnectedDevices()
+                        if (d.isConnected) {
+                            btManager.probeConnectedDeviceGatt()
+                            autoAppliedNote = "Auto-refreshed Bluetooth profiles and started BLE GATT probe."
+                        }
+                    }
+                    AutoFixAction.REQUEST_BT_PERMISSIONS,
+                    AutoFixAction.OPEN_BT_SETTINGS,
+                    AutoFixAction.SHOW_CI_PATCH,
+                    AutoFixAction.NONE -> Unit
+                }
+
+                _aiDoctorState.value = AiDoctorUiState.Diagnosed(
+                    diagnosis.copy(autoAppliedNote = autoAppliedNote)
+                )
+            } catch (e: TimeoutCancellationException) {
+                _aiDoctorState.value = AiDoctorUiState.Error(
+                    "AI Error Doctor timed out after 45s. Check internet connection and retry."
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _aiDoctorState.value = AiDoctorUiState.Error(
+                    e.localizedMessage ?: "AI Error Doctor failed to analyze error."
+                )
+            }
         }
     }
 

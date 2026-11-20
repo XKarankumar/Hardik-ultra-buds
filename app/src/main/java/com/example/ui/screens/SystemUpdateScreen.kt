@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Security
@@ -38,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.ai.AiDoctorUiState
+import com.example.ai.AutoFixAction
 import com.example.model.AppPreferencesState
 import com.example.model.UpdateStatus
 import com.example.ui.components.DotMatrixDivider
@@ -60,14 +63,19 @@ import kotlin.math.roundToInt
 fun SystemUpdateScreen(
     currentVersion: String,
     updateStatus: UpdateStatus,
+    aiDoctorState: AiDoctorUiState,
     prefsState: AppPreferencesState,
     onCheckForUpdates: () -> Unit,
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: (String) -> Unit,
     onSaveRepoUrl: (String) -> Unit,
+    onDiagnoseError: (String) -> Unit,
+    onRequestBtPermissions: () -> Unit,
+    onOpenBtSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var repoInput by remember(prefsState.githubRepoUrl) { mutableStateOf(prefsState.githubRepoUrl) }
+    var customErrorInput by remember { mutableStateOf("") }
 
     Box(
         modifier = modifier
@@ -414,6 +422,174 @@ fun SystemUpdateScreen(
                             hapticsEnabled = prefsState.hapticsEnabled
                         )
                     }
+                }
+            }
+
+            // AI Error Doctor & Automatic Recovery Panel (Firebase AI Logic - Gemini)
+            item {
+                GlassCard(highlighted = aiDoctorState is AiDoctorUiState.Diagnosed || aiDoctorState is AiDoctorUiState.Analyzing) {
+                    DotMatrixSectionHeader(
+                        title = "AI ERROR AUTO-DOCTOR",
+                        subtitle = "GEMINI AUTO-HEALING · ZERO LOGIN",
+                        trailing = {
+                            StatusDotBadge(
+                                label = if (prefsState.autoAiHealEnabled) "AUTO-FIX ON" else "MANUAL",
+                                isActive = prefsState.autoAiHealEnabled,
+                                activeColor = StatusEmerald
+                            )
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    when (aiDoctorState) {
+                        is AiDoctorUiState.Idle -> {
+                            Text(
+                                text = "Automatically diagnoses GitHub, Bluetooth, and Audio DSP errors. You can also paste any GitHub Actions or Gradle build error log below for an instant fix.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SilverText
+                            )
+                        }
+                        is AiDoctorUiState.Analyzing -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Rounded.AutoAwesome,
+                                    contentDescription = "AI analyzing",
+                                    tint = NothingRed
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Analyzing error with Gemini AI...",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = PureWhite
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                color = NothingRed,
+                                trackColor = GlassBorder,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        is AiDoctorUiState.Diagnosed -> {
+                            val res = aiDoctorState.result
+                            Text(
+                                text = "ROOT CAUSE",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = NothingRed
+                            )
+                            Text(
+                                text = res.rootCause,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = PureWhite
+                            )
+                            if (!res.autoAppliedNote.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "AUTO-FIXED: ${res.autoAppliedNote}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = StatusEmerald,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(GlassCardElevated)
+                                        .border(1.dp, StatusEmerald.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                        .padding(10.dp)
+                                )
+                            }
+                            if (res.fixSteps.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "RECOMMENDED STEPS",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MutedSteel
+                                )
+                                res.fixSteps.forEachIndexed { idx, step ->
+                                    Text(
+                                        text = "${idx + 1}. $step",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = SilverText
+                                    )
+                                }
+                            }
+                            if (!res.patchSnippet.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = res.patchSnippet,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = PureWhite,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(AmoledBlack)
+                                        .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
+                                        .padding(10.dp)
+                                )
+                            }
+                            when (res.autoFixAction) {
+                                AutoFixAction.REQUEST_BT_PERMISSIONS -> {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    NothingPillButton(
+                                        text = "GRANT BT PERMISSIONS",
+                                        onClick = onRequestBtPermissions,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        hapticsEnabled = prefsState.hapticsEnabled
+                                    )
+                                }
+                                AutoFixAction.OPEN_BT_SETTINGS -> {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    NothingPillButton(
+                                        text = "OPEN BLUETOOTH SETTINGS",
+                                        onClick = onOpenBtSettings,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        hapticsEnabled = prefsState.hapticsEnabled
+                                    )
+                                }
+                                else -> Unit
+                            }
+                        }
+                        is AiDoctorUiState.Error -> {
+                            Text(
+                                text = "AI Doctor Error: ${aiDoctorState.message}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = NothingRed
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = customErrorInput,
+                        onValueChange = { customErrorInput = it },
+                        label = { Text("Paste GitHub / Gradle / App Error Log") },
+                        minLines = 2,
+                        maxLines = 4,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NothingRed,
+                            unfocusedBorderColor = GlassBorder,
+                            focusedTextColor = PureWhite,
+                            unfocusedTextColor = PureWhite,
+                            focusedLabelColor = NothingRed,
+                            unfocusedLabelColor = SilverText
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("ai_error_log_input")
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    NothingPillButton(
+                        text = "AI DIAGNOSE & AUTO-FIX",
+                        onClick = {
+                            val toDiagnose = customErrorInput.ifBlank {
+                                (updateStatus as? UpdateStatus.Error)?.message
+                                    ?: "GitHub Actions build failed or no APK release detected"
+                            }
+                            onDiagnoseError(toDiagnose)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("ai_diagnose_button"),
+                        hapticsEnabled = prefsState.hapticsEnabled
+                    )
                 }
             }
 

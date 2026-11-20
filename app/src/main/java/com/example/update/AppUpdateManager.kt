@@ -59,7 +59,14 @@ class AppUpdateManager(
     fun currentVersionName(): String = BuildConfig.VERSION_NAME
 
     fun parseOwnerRepo(repoUrl: String): Pair<String, String>? {
-        val cleaned = repoUrl.trim().removeSuffix("/").removeSuffix(".git")
+        val cleaned = repoUrl.trim()
+            .removePrefix("git@github.com:")
+            .removeSuffix("/")
+            .removeSuffix(".git")
+            .replace(Regex("""/releases(?:/.*)?$"""), "")
+            .replace(Regex("""/tags(?:/.*)?$"""), "")
+        // Reject explicit insecure non-GitHub http URLs
+        if (cleaned.startsWith("http://", ignoreCase = true)) return null
         val regex = Regex("""^(?:https://github\.com/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$""")
         val match = regex.matchEntire(cleaned) ?: return null
         return match.groupValues[1] to match.groupValues[2]
@@ -79,9 +86,31 @@ class AppUpdateManager(
         return withContext(Dispatchers.IO) {
             try {
                 val response = apiService.getLatestRelease(parsed.first, parsed.second)
-                if (!response.isSuccessful) {
+                val release: GitHubReleaseDto? = if (response.isSuccessful) {
+                    response.body()
+                } else if (response.code() == 404) {
+                    // Fallback: check if repo has prereleases or exists without published releases
+                    val allReleases = runCatching {
+                        apiService.getReleases(parsed.first, parsed.second)
+                    }.getOrNull()
+                    val firstRelease = allReleases?.body()?.firstOrNull { !it.draft }
+                    if (firstRelease != null) {
+                        firstRelease
+                    } else {
+                        val repoExists = runCatching {
+                            apiService.getRepoMetadata(parsed.first, parsed.second).isSuccessful
+                        }.getOrDefault(false)
+                        val msg = if (repoExists) {
+                            "Repository ${parsed.first}/${parsed.second} exists, but no GitHub Releases have been published yet. Push tag v1.0.1 to publish an APK."
+                        } else {
+                            "GitHub repository ${parsed.first}/${parsed.second} not found or is private (HTTP 404)."
+                        }
+                        val err = UpdateStatus.Error(msg)
+                        _status.value = err
+                        return@withContext err
+                    }
+                } else {
                     val msg = when (response.code()) {
-                        404 -> "No published GitHub Releases found at ${parsed.first}/${parsed.second}."
                         403 -> "GitHub API rate limit reached. Try again later."
                         else -> "GitHub API error (HTTP ${response.code()})."
                     }
@@ -90,7 +119,7 @@ class AppUpdateManager(
                     return@withContext err
                 }
 
-                val release = response.body() ?: run {
+                if (release == null) {
                     val err = UpdateStatus.Error("Empty response from GitHub Releases API.")
                     _status.value = err
                     return@withContext err

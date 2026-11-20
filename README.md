@@ -98,3 +98,8 @@ gradle :app:testDebugUnitTest
 ### Hardware Honesty Note (OnePlus Nord Buds 3 Pro)
 - **Ultra Sound DSP** (`DynamicsProcessing` 10-band EQ, Soft Limiter, `LoudnessEnhancer`, `BassBoost`, `Virtualizer`, Stereo Balance, Acoustic Test Tone, and Find-My-Buds Chime) executes natively on Android audio hardware.
 - **Hardware ANC / Touch Controls / Wear Detection**: OnePlus Nord Buds 3 Pro uses a proprietary encrypted HeyMelody/OPlus protocol over RFCOMM/GATT. The app performs real BLE GATT discovery (`0x180F` Battery, `0x180A` Device Info, `0x1802` Immediate Alert) and honestly flags vendor-locked ANC controls as requiring the official HeyMelody companion app rather than simulating fake ANC toggles.
+
+### AI Error Auto-Doctor (Zero Sign-In)
+- Powered by **Firebase AI Logic (`gemini-3.8-flash`)** with App Check (no Google Sign-In required).
+- Automatically diagnoses GitHub Releases errors, normalizes malformed repository URLs, switches restricted DSP sessions, arms the Soft Limiter on overload warnings, and analyzes pasted GitHub Actions / Gradle error logs in the **SYSTEM** tab.
+

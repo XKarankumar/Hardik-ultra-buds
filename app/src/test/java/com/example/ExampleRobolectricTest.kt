@@ -24,10 +24,16 @@ class ExampleRobolectricTest {
 
         val repo = PreferencesRepository(context)
         val updater = AppUpdateManager(context, repo)
+
         val parsed = updater.parseOwnerRepo("https://github.com/hardik-audio/hardik-buds-pro-ultra-max")
         assertNotNull(parsed)
         assertEquals("hardik-audio", parsed?.first)
         assertEquals("hardik-buds-pro-ultra-max", parsed?.second)
+
+        val parsedWithReleases = updater.parseOwnerRepo("https://github.com/hardik-audio/hardik-buds-pro-ultra-max/releases/latest")
+        assertEquals("hardik-audio", parsedWithReleases?.first)
+        assertEquals("hardik-buds-pro-ultra-max", parsedWithReleases?.second)
+
         assertNull(updater.parseOwnerRepo("http://insecure.example.com/owner/repo"))
     }
 }
