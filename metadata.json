@@ -1,0 +1,6 @@
+{
+  "name": "Hardik Buds Pro",
+  "description": "Nothing OS-inspired Bluetooth earbuds companion with 10-band Ultra Sound EQ, honest ANC protocol inspection, and GitHub Releases auto-updater.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

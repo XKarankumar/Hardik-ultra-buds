@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Hardik Buds Pro</string>
+    <string name="brand_title_full">HARDIK BUDS PRO ULTRA MAX</string>
+    <string name="brand_system_title">HARDIK SYSTEM</string>
+    <string name="notification_channel_updates">System Updates</string>
+    <string name="notification_channel_updates_desc">Notifications for new GitHub Releases APK updates</string>
+</resources>
