@@ -830,7 +830,13 @@ class BluetoothEarbudsManager(context: Context) {
     fun release() {
         stopBleScan()
         stopFindEarbudsRing()
-        runCatching { activeGatt?.close() }
+        if (hasConnectPermission()) {
+            try {
+                activeGatt?.close()
+            } catch (_: SecurityException) {
+            }
+        }
+        activeGatt = null
         runCatching { appContext.unregisterReceiver(btReceiver) }
         runCatching {
             a2dpProxy?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.A2DP, it) }
