@@ -65,7 +65,7 @@ class AiErrorDoctor {
 
     private val model by lazy {
         Firebase.ai.generativeModel(
-            modelName = "gemini-3.8-flash",
+            modelName = "gemini-3.5-flash-lite",
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = diagnosticSchema
@@ -104,7 +104,7 @@ class AiErrorDoctor {
         """.trimIndent()
 
         try {
-            val response = withTimeout(45_000L) {
+            val response = withTimeout(60_000L) {
                 model.generateContent(prompt)
             }
             val jsonText = response.text ?: throw IllegalStateException("AI returned an empty diagnostic payload.")

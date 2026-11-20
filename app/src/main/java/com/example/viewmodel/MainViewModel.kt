@@ -64,7 +64,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             btManager.setAutoReconnectEnabled(prefs.autoReconnectEnabled)
             audioEngine.updateSafeListeningThreshold(prefs.safeListeningThresholdPct)
 
-            if (prefs.autoUpdateCheckEnabled) {
+            if (prefs.autoUpdateCheckEnabled &&
+                prefs.githubRepoUrl != AppPreferencesState().githubRepoUrl
+            ) {
                 val res = updateManager.checkForUpdates(prefs.githubRepoUrl, recordHistory = false)
                 if (res is UpdateStatus.Error && prefs.autoAiHealEnabled) {
                     diagnoseAndAutoHeal("GitHub Update Launch Check", res.message)
@@ -285,7 +287,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             } catch (e: TimeoutCancellationException) {
                 _aiDoctorState.value = AiDoctorUiState.Error(
-                    "AI Error Doctor timed out after 45s. Check internet connection and retry."
+                    "AI Error Doctor timed out after 60s. Check internet connection and retry."
                 )
             } catch (e: CancellationException) {
                 throw e
